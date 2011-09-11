@@ -1,5 +1,6 @@
+from datetime import timedelta
 # List of modules to import when celery starts.
-CELERY_IMPORTS = ("myapp.tasks", )
+CELERY_IMPORTS = ("tasks", )
 
 CELERY_CACHE_BACKEND = "dummy"
 
@@ -8,11 +9,33 @@ CELERY_CACHE_BACKEND = "dummy"
 #CELERY_RESULT_DBURI = "sqlite:///mydatabase.db"
 
 ## Broker settings.
-BROKER_URL = "amqp://guest:guest@localhost:5672//"
+BROKER_TRANSPORT = "sqlalchemy"
+BROKER_HOST = "sqlite:///celerydb.sqlite"
+
 
 ## Worker settings
 ## If you're doing mostly I/O you can have more processes,
 ## but if mostly spending CPU, try to keep it close to the
 ## number of CPUs on your machine. If not set, the number of CPUs/cores
 ## available will be used.
-CELERYD_CONCURRENCY = 10
+CELERYD_CONCURRENCY = 2
+
+CELERYBEAT_SCHEDULE = {
+#    "query_printjobs": {
+#        "task": "tasks.get_qr_queue",
+#        "schedule": timedelta(seconds=5),
+#    },
+#    "query_printers": {
+#        "task": "tasks.get_printers",
+#        "schedule": timedelta(seconds=1),
+#    },
+    "printer_heartbeat": {
+        "task": "tasks.get_printer_heartbeat",
+        "schedule": timedelta(seconds=1),
+    },
+}
+
+try:
+    from local_config import *
+except:
+    pass

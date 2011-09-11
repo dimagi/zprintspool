@@ -1,0 +1,4 @@
+local_config.py
+celerybeat-schedule
+*.pyc
+celerydb.sqlite

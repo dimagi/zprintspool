@@ -1,54 +1,133 @@
-from celery.tasks import task
-import socket
-from gevent import socket as gsocket
-from gevent import monkey
-import gevent
-monkey.patch_socket()
+import simplejson
+from datetime import datetime
+from celery.decorators import periodic_task
+from celery.schedules import crontab
+from celery.decorators import task
+from restkit import Resource
+import logging
+from util import do_send,gsend
+
+import celeryconfig
+
+
+printer_dict = {}
+
+
+def bootstrap():
+    """
+    Bootstrap all printers known to the system.
+    Get printers
+    Set the alerts to go to this host
+    """
+    get_printers()
+    set_alert_destination()
+
+#@periodic_task(run_every=crontab(hour=23, minute=59))
+@task
+def get_printers(host='https://mepimoz.dimagi.com'):
+    host='http://localhost:8000'
+    res = Resource(host)
+    auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
+    r = res.get('/api/zebra_printers/',  params_dict=auth_params)
+    json = simplejson.loads(r.body_string())
+    #load printers into memory, yo for caching purposes
+
+    for printer in json['objects']:
+        printer_uri = printer['resource_uri']
+        logging.error(repr(printer))
+        printer_dict[printer_uri]=printer
+    return printer_dict
+
+@task
+def set_alert_destination():
+    """Set the printer alert endpoing to this host's listening port
+    """
+    listener_ip_address = '192.168.0.108'
+    #listener_ip_address = '192.168.10.20' # actual setup
+
+    listener_port = 9111
+    if len(printer_dict.keys()) == 0:
+        get_printers()
+    alert_text="""
+    ^XA
+    ^SX*,D,Y,Y,%s,9111
+    ^XZ
+    """ % (listener_ip_address)
+    for k,v in printer_dict:
+        host = v['ip_address']
+        port = v['port']
+        do_send(host, port, alert_text)
+
+@task
+def get_printer_heartbeat():
+    """
+    Task to actively monitor the printer's status (vs. waiting to get alerts)
+    """
+    if len(printer_dict.keys()) == 0:
+        get_printers()
+    #logging.error("Getting printers: %s" % repr(printer_dict))
+    msg_text = """^XA^HH^XZ"""
+    for k,v in printer_dict.items():
+        host = v['ip_address']
+        port = v['port']
+        printer_uri = v['resource_uri']
+
+        info = gsend(host, port, msg_text, recv=True)
+
+        #prepare the rest resource for sending info to server
+        host='http://localhost:8000'
+        res = Resource(host)
+        auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
+
+        new_instance = dict()
+        new_instance['printer'] = printer_uri
+        new_instance['event_date'] =  datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000")
+        new_instance['status'] = 'printer uptime heartbeat'
 
 
 
-def gsend(host, port, zpl_string, recv=False):
-    s = gsocket.create_connection((host,port), timeout=5)
-    s.send(zpl_string)
-    #fileobj = s.makefile()
-    #fileobj.write(zpl_string)
-    #fileobj.flush()
+        if info is None or info == False:
+            #failed to reach printer or receive data
+            new_instance['is_cleared'] = False
+        elif isinstance(info, str):
+            #it's a string with info
+            if info.count('ZPL MODE') > 0:
+                #we got diagnostic info from printer
+                new_instance['is_cleared'] = True
+            else:
+                #something else, error
+                new_instance['is_cleared'] = False
 
-    if recv:
-        try:
-            while True:
-                #line = fileobj.readline()
-                line = s.recv(256)
-                print "%s (%d)" % (line.strip(), len(line))
-                if not line:
-                    print ("client disconnected")
-                    break
-        except socket.timeout, ex:
-            print "Exception: %s, %s" % (ex, ex.__class__)
+        res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
 
+@task
+def get_qr_queue(host='https://mepimoz.dimagi.com'):
+    host='http://localhost:8000'
+    res = Resource(host)
+    auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
+    r = res.get('/api/zebra_queue/',  params_dict=auth_params)
 
+    json = simplejson.loads(r.body_string())
 
+    if len(printer_dict.keys()) == 0:
+        get_printers()
+    logging.error(repr(printer_dict))
 
+    if len(json['objects']) > 0:
+        for instance in json['objects']:
+            uri = instance['resource_uri']
+            zpl_code= instance['zpl_code']
 
+            printer_uri = instance['destination_printer']
+            printer_ip = printer_dict[printer_uri]['ip_address']
+            printer_port = printer_dict[printer_uri]['port']
 
-def do_send(host, port, zpl_string, recv=False): #destination
-    try:
-        s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        s.connect((host,port))
-        s.send(zpl_string)
-    except Exception, ex:
-        print "*** Error sending: %s" % (ex)
-
-
-    if recv:
-        try:
-            print s.recv(1024)
-            pass
-        except Exception, ex:
-            print "**** Error trying to read from socket %s" % ex
-
-        try:
-            s.close()
-        except Exception, ex:
-            print "*** Error trying to close socket %s" % ex
-
+            instance['fulfilled_date'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000")
+            res.put(uri, simplejson.dumps(instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
+            logging.error(repr(instance))
+            #print "printing!"
+            do_send(printer_ip, printer_port, zpl_code, recv=False)
+            #print zpl_code
+            logging.error("ZPL: %s" % (zpl_code))
+    else:
+        logging.error("no jobs")

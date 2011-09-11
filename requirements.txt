@@ -1,0 +1,8 @@
+SQLAlchemy
+celery
+gevent
+greenlet
+kombu
+kombu-sqlalchemy
+restkit
+simplejson
