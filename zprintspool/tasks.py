@@ -52,7 +52,7 @@ def set_alert_destination():
     ^SX*,D,Y,Y,%s,9111
     ^XZ
     """ % (listener_ip_address)
-    for k,v in printer_dict:
+    for k,v in printer_dict.items():
         host = v['ip_address']
         port = v['port']
         do_send(host, port, alert_text)
