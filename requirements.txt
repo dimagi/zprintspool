@@ -2,6 +2,7 @@ SQLAlchemy
 celery
 gevent
 greenlet
+isodate
 kombu
 kombu-sqlalchemy
 restkit

@@ -41,7 +41,7 @@ def get_printers(host=celeryconfig.SERVER_HOST):
 def set_alert_destination():
     """Set the printer alert endpoing to this host's listening port
     """
-    listener_ip_address = celeryconfig.ZPRINT_PROXY
+    listener_ip_address = celeryconfig.ZPRINTER_PROXY
     #listener_ip_address = '192.168.10.20' # actual setup
 
     listener_port = 9111
