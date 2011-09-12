@@ -12,6 +12,7 @@ import celeryconfig
 
 printer_dict = {}
 
+is_bootstrapped=False
 
 def bootstrap():
     """
@@ -24,8 +25,7 @@ def bootstrap():
 
 #@periodic_task(run_every=crontab(hour=23, minute=59))
 @task
-def get_printers(host='https://mepimoz.dimagi.com'):
-    host='http://localhost:8000'
+def get_printers(host=celeryconfig.SERVER_HOST):
     res = Resource(host)
     auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
     r = res.get('/api/zebra_printers/',  params_dict=auth_params)
@@ -34,7 +34,6 @@ def get_printers(host='https://mepimoz.dimagi.com'):
 
     for printer in json['objects']:
         printer_uri = printer['resource_uri']
-        logging.error(repr(printer))
         printer_dict[printer_uri]=printer
     return printer_dict
 
@@ -42,7 +41,7 @@ def get_printers(host='https://mepimoz.dimagi.com'):
 def set_alert_destination():
     """Set the printer alert endpoing to this host's listening port
     """
-    listener_ip_address = '192.168.0.108'
+    listener_ip_address = celeryconfig.ZPRINT_PROXY
     #listener_ip_address = '192.168.10.20' # actual setup
 
     listener_port = 9111
@@ -59,13 +58,12 @@ def set_alert_destination():
         do_send(host, port, alert_text)
 
 @task
-def get_printer_heartbeat():
+def get_printer_heartbeat(host=celeryconfig.SERVER_HOST):
     """
     Task to actively monitor the printer's status (vs. waiting to get alerts)
     """
     if len(printer_dict.keys()) == 0:
         get_printers()
-    #logging.error("Getting printers: %s" % repr(printer_dict))
     msg_text = """^XA^HH^XZ"""
     for k,v in printer_dict.items():
         host = v['ip_address']
@@ -75,7 +73,6 @@ def get_printer_heartbeat():
         info = gsend(host, port, msg_text, recv=True)
 
         #prepare the rest resource for sending info to server
-        host='http://localhost:8000'
         res = Resource(host)
         auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
 
@@ -83,8 +80,6 @@ def get_printer_heartbeat():
         new_instance['printer'] = printer_uri
         new_instance['event_date'] =  datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000")
         new_instance['status'] = 'printer uptime heartbeat'
-
-
 
         if info is None or info == False:
             #failed to reach printer or receive data
@@ -101,17 +96,18 @@ def get_printer_heartbeat():
         res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
 
 @task
-def get_qr_queue(host='https://mepimoz.dimagi.com'):
-    host='http://localhost:8000'
+def get_qr_queue(host=celeryconfig.SERVER_HOST):
+
+    if not is_bootstrapped:
+        bootstrap()
+
     res = Resource(host)
     auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
     r = res.get('/api/zebra_queue/',  params_dict=auth_params)
-
     json = simplejson.loads(r.body_string())
 
     if len(printer_dict.keys()) == 0:
         get_printers()
-    logging.error(repr(printer_dict))
 
     if len(json['objects']) > 0:
         for instance in json['objects']:
@@ -124,10 +120,6 @@ def get_qr_queue(host='https://mepimoz.dimagi.com'):
 
             instance['fulfilled_date'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000")
             res.put(uri, simplejson.dumps(instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
-            logging.error(repr(instance))
-            #print "printing!"
             do_send(printer_ip, printer_port, zpl_code, recv=False)
-            #print zpl_code
-            logging.error("ZPL: %s" % (zpl_code))
     else:
-        logging.error("no jobs")
+        logging.debug("no jobs")

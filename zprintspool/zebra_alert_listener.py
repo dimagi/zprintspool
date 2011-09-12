@@ -4,7 +4,6 @@ import logging
 import tasks
 from datetime import datetime
 
-
 #do get printers from server via rest
 #cache printers and their IPs
 #when receiving event, then lookup then set data strucutre and push over
@@ -48,21 +47,15 @@ def zebra_alert_handler(socket, address):
 
             printer_uri = identify_printer(address, printers)
 
-            host='http://localhost:8000'
-            res = Resource(host)
+            res = Resource(celeryconfig.SERVER_HOST)
             auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
             #r = res.get('/api/zebra_status/',  params_dict=auth_params)
-            new_instance = {}
+            new_instance = dict()
             new_instance['printer'] = printer_uri
             new_instance['event_date'] =  datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000")
             new_instance['status'] = condition
             new_instance['is_cleared'] = is_cleared
-
             res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
-
-
-            print "Condition: %s: %s" % (condition, is_cleared)
-
     except Exception, ex:
         logging.error("Unknown exception, gobbling up: %s", ex)
 

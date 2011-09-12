@@ -21,17 +21,17 @@ BROKER_HOST = "sqlite:///celerydb.sqlite"
 CELERYD_CONCURRENCY = 2
 
 CELERYBEAT_SCHEDULE = {
-#    "query_printjobs": {
-#        "task": "tasks.get_qr_queue",
-#        "schedule": timedelta(seconds=5),
-#    },
-#    "query_printers": {
-#        "task": "tasks.get_printers",
-#        "schedule": timedelta(seconds=1),
-#    },
+    "query_printjobs": {
+        "task": "tasks.get_qr_queue",
+        "schedule": timedelta(seconds=3),
+    },
+    "query_printers": {
+        "task": "tasks.get_printers",
+        "schedule": timedelta(hours=24),
+    },
     "printer_heartbeat": {
         "task": "tasks.get_printer_heartbeat",
-        "schedule": timedelta(seconds=1),
+        "schedule": timedelta(hours=24),
     },
 }
 
