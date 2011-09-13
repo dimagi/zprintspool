@@ -1,18 +1,18 @@
 import simplejson
 from datetime import datetime
-from celery.decorators import periodic_task
-from celery.schedules import crontab
 from celery.decorators import task
-from restkit import Resource
 import logging
 from util import do_send,gsend
+from restkit import Resource, Manager
 
 import celeryconfig
 
 
 printer_dict = {}
-
 is_bootstrapped=False
+
+
+manager=Manager(max_conn=3)
 
 def bootstrap():
     """
@@ -26,7 +26,7 @@ def bootstrap():
 #@periodic_task(run_every=crontab(hour=23, minute=59))
 @task
 def get_printers(host=celeryconfig.SERVER_HOST):
-    res = Resource(host)
+    res = Resource(host, manager=manager)
     auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
     r = res.get('/api/zebra_printers/',  params_dict=auth_params)
     json = simplejson.loads(r.body_string())
@@ -73,7 +73,7 @@ def get_printer_heartbeat(host=celeryconfig.SERVER_HOST):
         info = gsend(host, port, msg_text, recv=True)
 
         #prepare the rest resource for sending info to server
-        res = Resource(host)
+        res = Resource(host, manager=manager)
         auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
 
         new_instance = dict()
@@ -101,7 +101,7 @@ def get_qr_queue(host=celeryconfig.SERVER_HOST):
     if not is_bootstrapped:
         bootstrap()
 
-    res = Resource(host)
+    res = Resource(host, manager=manager)
     auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
     r = res.get('/api/zebra_queue/',  params_dict=auth_params)
     json = simplejson.loads(r.body_string())

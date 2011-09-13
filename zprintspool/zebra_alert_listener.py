@@ -1,6 +1,7 @@
 import simplejson
 from gevent.server import StreamServer
 import logging
+from restkit.globals import set_manager
 import tasks
 from datetime import datetime
 
@@ -13,7 +14,8 @@ from datetime import datetime
 #received ERROR CLEARED: HEAD OPEN [ZBR3913909] :: ('192.168.0.85', 3973)
 #received ALERT CLEARED: PRINTER PAUSED [ZBR3913909] :: ('192.168.0.85', 3974)
 import celeryconfig
-from restkit import Resource
+from restkit import Resource, request
+from restkit.manager.mgevent import GeventManager
 
 def identify_printer(address,printers):
     for k,v in printers.items():
@@ -22,6 +24,8 @@ def identify_printer(address,printers):
     return None
 
 printers= {}
+
+set_manager(GeventManager(timeout=60))
 
 def zebra_alert_handler(socket, address):
     try:
