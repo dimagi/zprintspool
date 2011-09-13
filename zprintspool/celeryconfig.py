@@ -23,7 +23,7 @@ CELERYD_CONCURRENCY = 2
 CELERYBEAT_SCHEDULE = {
     "query_printjobs": {
         "task": "tasks.get_qr_queue",
-        "schedule": timedelta(seconds=3),
+        "schedule": timedelta(seconds=10),
     },
     "query_printers": {
         "task": "tasks.get_printers",
