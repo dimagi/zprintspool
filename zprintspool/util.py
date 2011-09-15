@@ -16,9 +16,6 @@ def gsend(host, port, zpl_string, recv=False):
     try:
         s = gsocket.create_connection((host,port), timeout=5)
         s.send(zpl_string)
-        #fileobj = s.makefile()
-        #fileobj.write(zpl_string)
-        #fileobj.flush()
     except Exception, ex:
         logging.error(repr(ex))
         return False
@@ -38,7 +35,7 @@ def gsend(host, port, zpl_string, recv=False):
                     break
             return data
         except socket.timeout, ex:
-            logging.error("Exception: %s, %s" % (ex, ex.__class__))
+            logging.error("GSend Exception: %s, %s" % (ex, ex.__class__))
             return None
     else:
         return True
@@ -50,6 +47,7 @@ def gsend(host, port, zpl_string, recv=False):
 def do_send(host, port, zpl_string, recv=False): #destination
     try:
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        s.settimeout(4)
         s.connect((host,port))
         s.send(zpl_string)
     except Exception, ex:
@@ -69,13 +67,13 @@ def do_send(host, port, zpl_string, recv=False): #destination
                     data += read
 
         except Exception, ex:
-            logging.error("Error reading data from socket, %s" % ex)
+            logging.error("DoSend Error reading data from socket, %s" % ex)
             return None
 
         try:
             s.close()
         except Exception, ex:
-            logging.error("Error trying to close socket")
+            logging.error("DoSend Error trying to close socket")
         return data
     else:
         s.close()

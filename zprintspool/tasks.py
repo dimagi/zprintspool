@@ -26,16 +26,21 @@ def bootstrap():
 #@periodic_task(run_every=crontab(hour=23, minute=59))
 @task
 def get_printers(host=celeryconfig.SERVER_HOST):
-    res = Resource(host, manager=manager)
-    auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
-    r = res.get('/api/zebra_printers/',  params_dict=auth_params)
-    json = simplejson.loads(r.body_string())
-    #load printers into memory, yo for caching purposes
+    try:
+        res = Resource(host, manager=manager)
+        auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
+        r = res.get('/api/zebra_printers/',  params_dict=auth_params)
+        json = simplejson.loads(r.body_string())
+        #load printers into memory, yo for caching purposes
 
-    for printer in json['objects']:
-        printer_uri = printer['resource_uri']
-        printer_dict[printer_uri]=printer
-    return printer_dict
+        for printer in json['objects']:
+            printer_uri = printer['resource_uri']
+            printer_dict[printer_uri]=printer
+        return printer_dict
+    except Exception, ex:
+        logging.error("Error retrieiving printers, not reachable:  %s", ex )
+        return dict()
+
 
 @task
 def set_alert_destination():
@@ -57,8 +62,9 @@ def set_alert_destination():
         port = v['port']
         do_send(host, port, alert_text)
 
+
 @task
-def get_printer_heartbeat(host=celeryconfig.SERVER_HOST):
+def get_printer_heartbeat():
     """
     Task to actively monitor the printer's status (vs. waiting to get alerts)
     """
@@ -66,14 +72,14 @@ def get_printer_heartbeat(host=celeryconfig.SERVER_HOST):
         get_printers()
     msg_text = """^XA^HH^XZ"""
     for k,v in printer_dict.items():
-        host = v['ip_address']
-        port = v['port']
+        print_host = v['ip_address']
+        print_port = v['port']
         printer_uri = v['resource_uri']
 
-        info = gsend(host, port, msg_text, recv=True)
+        info = do_send(print_host, print_port, msg_text, recv=True)
 
         #prepare the rest resource for sending info to server
-        res = Resource(host, manager=manager)
+        res = Resource(celeryconfig.SERVER_HOST, manager=manager)
         auth_params = {'username':celeryconfig.ZPRINTER_USERNAME, 'api_key': celeryconfig.ZPRINTER_API_KEY}
 
         new_instance = dict()
@@ -92,7 +98,6 @@ def get_printer_heartbeat(host=celeryconfig.SERVER_HOST):
             else:
                 #something else, error
                 new_instance['is_cleared'] = False
-
         res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
 
 @task
