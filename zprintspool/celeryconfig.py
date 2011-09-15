@@ -31,7 +31,7 @@ CELERYBEAT_SCHEDULE = {
     },
     "printer_heartbeat": {
         "task": "tasks.get_printer_heartbeat",
-        "schedule": timedelta(seconds=10),
+        "schedule": timedelta(seconds=120),
     },
 }
 
