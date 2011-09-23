@@ -51,7 +51,7 @@ def do_send(host, port, zpl_string, recv=False): #destination
         s.connect((host,port))
         s.send(zpl_string)
     except Exception, ex:
-        logging.error("Error trying to establish and send data on socket")
+        logging.error("Error trying to establish and send data on socket: %s" % (ex))
         s.close()
         return False
 

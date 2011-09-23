@@ -98,7 +98,10 @@ def get_printer_heartbeat():
             else:
                 #something else, error
                 new_instance['is_cleared'] = False
-        res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
+        try:
+            res.post('api/zebra_status/', simplejson.dumps(new_instance), headers={'Content-Type': 'application/json'}, params_dict=auth_params)
+        except Exception, ex:
+            logging.error("Error trying to post heartbeat to host %s" % ex)
 
 @task
 def get_qr_queue(host=celeryconfig.SERVER_HOST):
